@@ -20,7 +20,7 @@ device = "mps" if torch.backends.mps.is_available() else "cpu"
 
 # load finetuned model on CPU first (to avoid meta tensor error)
 model = SentenceTransformer(
-    "/Users/kirtan_patel/Documents/SproutsAI/model/all_minilm_finetuned", device="cpu")
+    "model/all_minilm_finetuned", device="cpu")
 model = model.to(device)
 
 def normalize_name(name):

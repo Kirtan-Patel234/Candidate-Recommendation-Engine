@@ -43,6 +43,84 @@ This is a web app that recommends the best candidates for a given job descriptio
 
 ---
 
+## Model Training
+
+The semantic similarity model was fine-tuned using [SentenceTransformers](https://www.sbert.net/) with the following workflow:
+
+1. **Data Preparation**
+
+   - Job descriptions and resumes were paired with labels (`normal_score` = 0/1).
+   - Data was split into **train (80%)** and **test (20%)** sets with stratification to preserve class balance.
+
+2. **Training Process**
+
+   - Each pair was wrapped into a `sentence_transformers.InputExample`.
+   - We trained `all-MiniLM-L6-v2` using **CosineSimilarityLoss**, so that matching job–resume pairs are close in embedding space and non-matching pairs are farther apart.
+   - Training was performed for **3 epochs** with batch size 16.
+
+   Example training loop:
+
+   ```python
+   from sentence_transformers import SentenceTransformer, InputExample, losses
+   from torch.utils.data import DataLoader
+
+   model = SentenceTransformer("all-MiniLM-L6-v2")
+
+   train_dataloader = DataLoader(train_examples, shuffle=True, batch_size=16)
+   train_loss = losses.CosineSimilarityLoss(model)
+
+   model.fit(
+       train_objectives=[(train_dataloader, train_loss)],
+       epochs=3,
+       warmup_steps=int(len(train_dataloader) * 0.1)
+   )
+   ```
+
+   3. **Evaluation**
+
+- On the test set, cosine similarity was computed between job–resume embeddings.
+- Metrics obtained:
+
+  - **ROC AUC**: 0.81 (good ranking performance)
+  - **Accuracy**: ~0.71 (after threshold tuning at 0.54)
+
+Example evaluation snippet:
+
+```python
+from sklearn.metrics import roc_auc_score, accuracy_score
+import numpy as np
+
+# Encode job and resume embeddings
+job_embs = model.encode(test_job_texts, convert_to_numpy=True, show_progress_bar=True)
+resume_embs = model.encode(test_resume_texts, convert_to_numpy=True, show_progress_bar=True)
+
+# Cosine similarity
+cosine_scores = np.sum(job_embs * resume_embs, axis=1) / (
+   np.linalg.norm(job_embs, axis=1) * np.linalg.norm(resume_embs, axis=1)
+)
+
+# ROC AUC
+roc_auc = roc_auc_score(test_labels, cosine_scores)
+
+# Convert to binary predictions with threshold 0.54
+preds = [1 if s >= 0.54 else 0 for s in cosine_scores]
+acc = accuracy_score(test_labels, preds)
+
+print("ROC AUC:", roc_auc, "Accuracy:", acc)
+```
+
+4. **Model Export**
+
+- The fine-tuned model was saved in `model/all_minilm_finetuned/`
+- This model is loaded in the app for inference:
+
+```python
+model.save("model/all_minilm_finetuned/")
+loaded_model = SentenceTransformer("model/all_minilm_finetuned/")
+```
+
+---
+
 ## Setup & Installation
 
 ### Requirements
