@@ -123,6 +123,79 @@ Built with Streamlit for an interactive, easy-to-use web experience.</p></li>
 </ol>
 <hr>
 </section>
+<section id="model-training" class="level2">
+<h2 class="anchored" data-anchor-id="model-training">Model Training</h2>
+<p>The semantic similarity model was fine-tuned using <a href="https://www.sbert.net/">SentenceTransformers</a> with the following workflow:</p>
+<ol type="1">
+<li><p><strong>Data Preparation</strong></p>
+<ul>
+<li>Job descriptions and resumes were paired with labels (<code>normal_score</code> = 0/1).</li>
+<li>Data was split into <strong>train (80%)</strong> and <strong>test (20%)</strong> sets with stratification to preserve class balance.</li>
+</ul></li>
+<li><p><strong>Training Process</strong></p>
+<ul>
+<li>Each pair was wrapped into a <code>sentence_transformers.InputExample</code>.</li>
+<li>We trained <code>all-MiniLM-L6-v2</code> using <strong>CosineSimilarityLoss</strong>, so that matching job–resume pairs are close in embedding space and non-matching pairs are farther apart.</li>
+<li>Training was performed for <strong>3 epochs</strong> with batch size 16.</li>
+</ul>
+<p>Example training loop:</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sentence_transformers <span class="im">import</span> SentenceTransformer, InputExample, losses</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> torch.utils.data <span class="im">import</span> DataLoader</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>model <span class="op">=</span> SentenceTransformer(<span class="st">"all-MiniLM-L6-v2"</span>)</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>train_dataloader <span class="op">=</span> DataLoader(train_examples, shuffle<span class="op">=</span><span class="va">True</span>, batch_size<span class="op">=</span><span class="dv">16</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>train_loss <span class="op">=</span> losses.CosineSimilarityLoss(model)</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>model.fit(</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    train_objectives<span class="op">=</span>[(train_dataloader, train_loss)],</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    epochs<span class="op">=</span><span class="dv">3</span>,</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    warmup_steps<span class="op">=</span><span class="bu">int</span>(<span class="bu">len</span>(train_dataloader) <span class="op">*</span> <span class="fl">0.1</span>)</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<ol start="3" type="1">
+<li><strong>Evaluation</strong></li>
+</ol></li>
+</ol>
+<ul>
+<li><p>On the test set, cosine similarity was computed between job–resume embeddings.</p></li>
+<li><p>Metrics obtained:</p>
+<ul>
+<li><strong>ROC AUC</strong>: 0.81 (good ranking performance)</li>
+<li><strong>Accuracy</strong>: ~0.71 (after threshold tuning at 0.54)</li>
+</ul></li>
+</ul>
+<p>Example evaluation snippet:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> sklearn.metrics <span class="im">import</span> roc_auc_score, accuracy_score</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> numpy <span class="im">as</span> np</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Encode job and resume embeddings</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>job_embs <span class="op">=</span> model.encode(test_job_texts, convert_to_numpy<span class="op">=</span><span class="va">True</span>, show_progress_bar<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>resume_embs <span class="op">=</span> model.encode(test_resume_texts, convert_to_numpy<span class="op">=</span><span class="va">True</span>, show_progress_bar<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Cosine similarity</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>cosine_scores <span class="op">=</span> np.<span class="bu">sum</span>(job_embs <span class="op">*</span> resume_embs, axis<span class="op">=</span><span class="dv">1</span>) <span class="op">/</span> (</span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>   np.linalg.norm(job_embs, axis<span class="op">=</span><span class="dv">1</span>) <span class="op">*</span> np.linalg.norm(resume_embs, axis<span class="op">=</span><span class="dv">1</span>)</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a><span class="co"># ROC AUC</span></span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>roc_auc <span class="op">=</span> roc_auc_score(test_labels, cosine_scores)</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert to binary predictions with threshold 0.54</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a>preds <span class="op">=</span> [<span class="dv">1</span> <span class="cf">if</span> s <span class="op">&gt;=</span> <span class="fl">0.54</span> <span class="cf">else</span> <span class="dv">0</span> <span class="cf">for</span> s <span class="kw">in</span> cosine_scores]</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>acc <span class="op">=</span> accuracy_score(test_labels, preds)</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"ROC AUC:"</span>, roc_auc, <span class="st">"Accuracy:"</span>, acc)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<ol start="4" type="1">
+<li><strong>Model Export</strong></li>
+</ol>
+<ul>
+<li>The fine-tuned model was saved in <code>model/all_minilm_finetuned/</code></li>
+<li>This model is loaded in the app for inference:</li>
+</ul>
+<div class="sourceCode" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>model.save(<span class="st">"model/all_minilm_finetuned/"</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>loaded_model <span class="op">=</span> SentenceTransformer(<span class="st">"model/all_minilm_finetuned/"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<hr>
+</section>
 <section id="setup-installation" class="level2">
 <h2 class="anchored" data-anchor-id="setup-installation">Setup &amp; Installation</h2>
 <section id="requirements" class="level3">
@@ -140,13 +213,13 @@ Built with Streamlit for an interactive, easy-to-use web experience.</p></li>
 </section>
 <section id="installation" class="level3">
 <h3 class="anchored" data-anchor-id="installation">Installation</h3>
-<div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install streamlit fitz sentence-transformers torch spacy nameparser google-generativeai python-dotenv</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb4"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install streamlit fitz sentence-transformers torch spacy nameparser google-generativeai python-dotenv</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <p>or</p>
-<div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-r</span> requirements.txt</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="ex">pip</span> install <span class="at">-r</span> requirements.txt</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
 <section id="usage" class="level3">
 <h3 class="anchored" data-anchor-id="usage">Usage</h3>
-<div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="ex">streamlit</span> run app.py</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="ex">streamlit</span> run app.py</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </section>
 </section>
 <section id="model-dataset-setup" class="level2">
