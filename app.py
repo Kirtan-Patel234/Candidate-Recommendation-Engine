@@ -17,10 +17,15 @@ genai.configure(api_key=api_key)
 
 device = "mps" if torch.backends.mps.is_available() else "cpu"
 
-# load finetuned model on CPU first (to avoid meta tensor error)
+# Get token from Streamlit secrets
+hf_token = st.secrets["HF_TOKEN"]
+
+# Load your fine-tuned model using the token
 model = SentenceTransformer(
-    "kpat3149/all_minilm_finetuned", device='cpu')
-model = model.to(device)
+    "kpat3149/all_minilm_finetuned",
+    use_auth_token=hf_token,
+    device="cpu"
+)
 
 def normalize_name(name):
     return " ".join(name.split()).lower()
