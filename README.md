@@ -6,8 +6,8 @@ This is a web app that recommends the best candidates for a given job descriptio
 
 Demo
 
-Live App: Streamlit Demo
-Code Repository: GitHub Repo
+Live App: https://candidate-recommendation-engine-ev7c2jixvc3yvtejzbw6kq.streamlit.app
+Code Repository: https://github.com/Kirtan-Patel234/Candidate-Recommendation-Engine/blob/main/app.py
 
 ---
 
