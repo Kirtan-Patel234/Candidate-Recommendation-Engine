@@ -10,9 +10,6 @@ import google.generativeai as genai
 from dotenv import load_dotenv
 from nameparser import HumanName
 
-#huggingface token
-token = os.environ.get("HUGGINGFACE_TOKEN")
-
 # load in google api key to generate resume summaries
 load_dotenv()
 api_key = os.getenv("GOOGLE_API_KEY")
@@ -22,7 +19,7 @@ device = "mps" if torch.backends.mps.is_available() else "cpu"
 
 # load finetuned model on CPU first (to avoid meta tensor error)
 model = SentenceTransformer(
-    "kpat3149/all_minilm_finetuned", use_auth_token=token)
+    "kpat3149/all_minilm_finetuned", device='cpu')
 model = model.to(device)
 
 def normalize_name(name):
