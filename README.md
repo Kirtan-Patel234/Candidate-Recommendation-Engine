@@ -4,6 +4,13 @@ This is a web app that recommends the best candidates for a given job descriptio
 
 ---
 
+Demo
+
+Live App: Streamlit Demo
+Code Repository: GitHub Repo
+
+---
+
 ## Features
 
 - Accepts a **job description** via text input
@@ -111,12 +118,11 @@ print("ROC AUC:", roc_auc, "Accuracy:", acc)
 
 4. **Model Export**
 
-- The fine-tuned model was saved in `model/all_minilm_finetuned/`
+- The fine-tuned model was saved to my profile on Huggingface
 - This model is loaded in the app for inference:
 
 ```python
-model.save("model/all_minilm_finetuned/")
-loaded_model = SentenceTransformer("model/all_minilm_finetuned/")
+loaded_model = SentenceTransformer("kpat3149/all_minilm_finetuned/")
 ```
 
 ---
